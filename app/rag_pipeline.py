@@ -1,20 +1,20 @@
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from dotenv import load_dotenv
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 class RAGAssistant:
     def __init__(self, pdf_path: str):
-        """Initialize the local embedding model, Gemini LLM, and project PDF path."""
+        """Initialize the embedding model, Gemini LLM, and project PDF path."""
         load_dotenv()
 
         self.pdf_path = pdf_path
@@ -33,24 +33,31 @@ class RAGAssistant:
 
         self.embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             temperature=0,
             api_key=self.api_key,
         )
         self.vectorstore = None
 
+    def _resolve_pdf_path(self) -> str:
+        """Find the PDF on disk, accepting both standard and legacy naming patterns."""
+        candidates = [
+            self.resolved_pdf_path,
+            os.path.join(self.project_root, "data", "handbook.pdf"),
+            os.path.join(self.project_root, "data", "handbook.pdf.pdf"),
+        ]
+
+        for candidate in candidates:
+            if candidate and os.path.exists(candidate):
+                return candidate
+
+        raise FileNotFoundError(
+            f"Could not find the PDF at '{self.resolved_pdf_path}' or in the project data folder."
+        )
+
     def initialize_pipeline(self):
         """Load the PDF, split the text into chunks, and build a local FAISS index."""
-        default_pdf = os.path.join(self.project_root, "data", "handbook.pdf")
-
-        if os.path.exists(self.resolved_pdf_path):
-            pdf_path = self.resolved_pdf_path
-        elif os.path.exists(default_pdf):
-            pdf_path = default_pdf
-        else:
-            raise FileNotFoundError(
-                f"Could not find the PDF at '{self.resolved_pdf_path}' or '{default_pdf}'."
-            )
+        pdf_path = self._resolve_pdf_path()
 
         loader = PyPDFLoader(pdf_path)
         documents = loader.load()
@@ -70,14 +77,29 @@ class RAGAssistant:
         return self.vectorstore
 
     def _extract_page_number(self, document: Document) -> int:
-        """Extract the page number from metadata and convert from zero-based PDF indexing."""
+        """Extract page number from metadata and translate zero-based PDF indexing to one-based."""
         metadata = getattr(document, "metadata", {}) or {}
         page_number = int(metadata.get("page", 0)) + 1
         return page_number
 
-    def _normalize_answer(self, answer: str) -> str:
-        """Normalize model output and enforce exact fallback behavior for unknown answers."""
-        cleaned = re.sub(r"\s+", " ", answer or "").strip()
+    def _normalize_answer(self, answer) -> str:
+        """Normalize model output and rigidly enforce the fallback behavior."""
+        # 🌟 FIX: If Gemini returns a structural list of blocks, extract the text component safely
+        if isinstance(answer, list):
+            text_parts = []
+            for item in answer:
+                if isinstance(item, dict) and "text" in item:
+                    text_parts.append(item["text"])
+                elif hasattr(item, "text"):
+                    text_parts.append(item.text)
+                else:
+                    text_parts.append(str(item))
+            answer = "".join(text_parts)
+        
+        # Ensure we are handling a string moving forward
+        answer_str = str(answer) if answer is not None else ""
+        
+        cleaned = re.sub(r"\s+", " ", answer_str).strip()
         cleaned = cleaned.strip("\"'` ")
 
         if not cleaned:
@@ -90,7 +112,10 @@ class RAGAssistant:
         return cleaned
 
     def ask_question(self, question: str) -> dict:
-        """Find the best matches in the vectorstore and answer using Gemini."""
+        """Find the best matches in the vector store and answer using Gemini."""
+        if not question or not question.strip():
+            raise ValueError("Question cannot be empty.")
+
         if self.vectorstore is None:
             self.initialize_pipeline()
 
@@ -115,13 +140,11 @@ class RAGAssistant:
             )
         )
 
-        user_message = HumanMessage(
-            content=(
-                f"Question: {question}\n\nContext:\n{context}"
-            )
-        )
+        user_message = HumanMessage(content=f"Question: {question}\n\nContext:\n{context}")
 
         response = self.llm.invoke([system_message, user_message])
+        
+        # Safely pass the text content layer down to our updated normalizer method
         answer = response.content if hasattr(response, "content") else str(response)
         normalized_answer = self._normalize_answer(answer)
 
