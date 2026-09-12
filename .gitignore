@@ -1,5 +1,75 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+
+# Virtual environments / local tooling
+.venv/
+venv/
+env/
+ENV/
+.env/
+.virtual_envs/
+virtualenv/
+.python-version
+
+# Environment files and secrets
 .env
 .env.*
 !.env.example
-__pycache__/
-*.pyc
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# FastAPI / app generated files
+*.sqlite3
+*.db
+instance/
+
+# Test and coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# IDE and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+
+# Build / distribution artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# LangChain / local model cache
+.langchain/
+.cache/
+
+# Local logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Project-local secrets and generated data
+secrets/
+private/
+credentials/
+
+# Optional: allow a sample env file
+!.env.example
