@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+langchain
+langchain-community
+langchain-core
+langchain-google-genai
+langchain-huggingface
+pypdf
+faiss-cpu
+python-dotenv
+beautifulsoup4
+requests
+pytest
+httpx
