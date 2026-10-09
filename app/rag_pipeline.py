@@ -34,10 +34,10 @@ class RAGAssistant:
 
         # CLOUD EMBEDDINGS FIX: Bypasses local binary blocks by shifting execution to Google's API
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="text-embedding-005", 
-            google_api_key=self.api_key
+            model="models/gemini-embedding-001",
+            google_api_key=self.api_key,
         )
-        
+
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-3.6-flash",
             temperature=0,
@@ -51,6 +51,8 @@ class RAGAssistant:
             self.resolved_pdf_path,
             os.path.join(self.project_root, "data", "handbook.pdf"),
             os.path.join(self.project_root, "data", "handbook.pdf.pdf"),
+            os.path.join(self.project_root, "data", "handbook.PDF"),
+            os.path.join(self.project_root, "data", "handbook.PDF.pdf"),
         ]
 
         for candidate in candidates:

@@ -77,15 +77,19 @@ def initialize_rag_assistant() -> RAGAssistant:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize the assistant during startup without crashing the process."""
     app.state.rag_assistant: Optional[RAGAssistant] = None
+    app.state.rag_startup_error: Optional[str] = None
 
     try:
         app.state.rag_assistant = initialize_rag_assistant()
         logger.info("RAG assistant initialized successfully during startup.")
     except FileNotFoundError as exc:
+        app.state.rag_startup_error = str(exc)
         logger.warning("Handbook PDF missing at startup: %s", exc)
     except ValueError as exc:
+        app.state.rag_startup_error = str(exc)
         logger.warning("Startup configuration error: %s", exc)
     except Exception as exc:  # pragma: no cover - defensive production guard
+        app.state.rag_startup_error = f"Unexpected startup error: {exc}"
         logger.exception("Unexpected startup error while initializing the RAG assistant: %s", exc)
 
     yield
@@ -103,17 +107,23 @@ app = FastAPI(
 async def health_check() -> Dict[str, object]:
     """Provide a lightweight monitoring endpoint for orchestrators and automation tools."""
     initialized = getattr(app.state, "rag_assistant", None) is not None
-    return {"status": "ok", "initialized": initialized}
+    startup_error = getattr(app.state, "rag_startup_error", None)
+    response = {"status": "ok", "initialized": initialized}
+    if startup_error:
+        response["error"] = startup_error
+    return response
 
 
 @app.post("/ask")
 async def ask_question(payload: QuestionRequest) -> Dict[str, str]:
     """Answer a question using the configured multi-source assistant."""
     rag_assistant = getattr(app.state, "rag_assistant", None)
+    startup_error = getattr(app.state, "rag_startup_error", None)
     if rag_assistant is None:
+        detail = startup_error or "RAG pipeline is not initialized. Please verify the handbook PDF and API configuration."
         raise HTTPException(
             status_code=503,
-            detail="RAG pipeline is not initialized. Please verify the handbook PDF and API configuration.",
+            detail=detail,
         )
 
     try:
