@@ -76,8 +76,8 @@ def initialize_rag_assistant() -> RAGAssistant:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize the assistant during startup without crashing the process."""
-    app.state.rag_assistant: Optional[RAGAssistant] = None
-    app.state.rag_startup_error: Optional[str] = None
+    app.state.rag_assistant = None
+    app.state.rag_startup_error = None
 
     try:
         app.state.rag_assistant = initialize_rag_assistant()
